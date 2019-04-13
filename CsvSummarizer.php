@@ -1,30 +1,49 @@
 <?php
 
+$maxChartItems = 400;
+
 $csvAddress = 'paxcounter_data.csv';
-
-//$csvFile = fopen("filename.csv", "r");
-
-//$data = fgetcsv($csvFile, 0, ",");
-
 $fp = fopen($csvAddress, 'r');
 
 // get the first (header) line
 /** @var array $header */
 $header = fgetcsv($fp);
-$timeColumnName = $header[0];
-$valueColumnName = $header[1];
-
-var_dump($timeColumnName, $valueColumnName); //exit;
 
 // get the rest of the rows
-$data = array();
+$dataArray = array();
 while ($row = fgetcsv($fp)) {
+    //var_dump($row); //exit;
     $arr = array();
-    foreach ($header as $i => $col)
-        var_dump($i, $col);
-        exit;
-        $arr[$col] = $row[$i];
-    $data[] = $arr;
+    foreach ($header as $columnId => $columnName)
+        //  var_dump("rowNumber", $rowNumber, "value", $col);
+        //exit;
+        $arr[$columnName] = $row[$columnId];
+    $dataArray[] = $arr;
+
+
 }
 
-//print_r($data);
+var_dump($dataArray);
+
+/**
+ * How to clean the data?
+ *
+ * clean the data - throw away night times
+ *
+ * We have a max of 400 values - take the whole timeperiod available and get make 400 intervalls out of it
+ *
+ * Summarize the data inside one intervall to mean values
+ *
+ * build new array
+ *
+ *
+ */
+
+
+// clean the data - throw away night times
+
+$filteredDataArray = array();
+
+
+
+
