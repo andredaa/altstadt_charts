@@ -8,6 +8,8 @@ $fp = fopen($csvAddress, 'r');
 // get the first (header) line
 /** @var array $header */
 $header = fgetcsv($fp);
+$timeColumnName = $header[0];
+$valueColumnName = $header[1];
 
 // get the rest of the rows
 $dataArray = array();
@@ -23,7 +25,7 @@ while ($row = fgetcsv($fp)) {
 
 }
 
-var_dump($dataArray);
+//var_dump($dataArray);
 
 /**
  * How to clean the data?
@@ -39,10 +41,32 @@ var_dump($dataArray);
  *
  */
 
-
 // clean the data - throw away night times
+$dataArrayDayTimes = array();
+foreach ($dataArray as $timeValuePair) {
+    /** @var DateTime $time */
+    $time = new DateTime($timeValuePair[$timeColumnName]);
+    $unixTimeStamp = $time->getTimestamp();
+    $hour = date('H ', $unixTimeStamp);
 
-$filteredDataArray = array();
+    if ($hour < 23 && $hour > 6) {
+        array_push($dataArrayDayTimes, $timeValuePair);
+    }
+}
+// var_dump($dataArrayDayTimes); exit;
+
+// get intervall length for timeframe
+$earliest = new DateTime($dataArrayDayTimes[0][$timeColumnName]);
+$latest = new DateTime($dataArrayDayTimes[sizeof($dataArrayDayTimes)][$timeColumnName]);
+$earliestTimeStamp = $earliest->getTimestamp();
+$latestTimeStamp = $latest->getTimestamp();
+// normal timestamp difference is in seconds
+$intervallHours = (($latestTimeStamp - $earliestTimeStamp) / 60 /60) /$maxChartItems;
+
+//echo date('Y-m-d H:i:s', $earliestTimeStamp);
+//echo date('Y-m-d H:i:s', $latestTimeStamp);
+//var_dump($intervallHours);
+
 
 
 
