@@ -47,8 +47,8 @@ foreach ($dataArray as $timeValuePair) {
         array_push($dataArrayDayTimes, $timeValuePair);
     }
 }
+
 var_dump(sizeof($dataArrayDayTimes), sizeof($dataArray));// exit;
-//var_dump($dataArrayDayTimes); exit;
 
 // get intervall length for timeframe and max chart items
 $earliest = new DateTime($dataArrayDayTimes[0][$timeColumnName]);
@@ -93,7 +93,6 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
         // reset for next loop and jump to next interval
         $startTimeStamp = $endTimeStamp;
         $proposedEndTimeStamp = $startTimeStamp + $intervalTimeStamp;
-
         // jump to next day if the new interval end time would be after the $dayEndHour
         if (!(date('H', $proposedEndTimeStamp) >= $dayEndHour)) {
             $endTimeStamp = $proposedEndTimeStamp;
@@ -111,4 +110,21 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
 var_dump("gefilterte Werte");   
 var_dump(count($filteredValues));
 var_dump($filteredValues);
+
+// close source csv file
+fclose($fp);
+
+// open new csv file
+$txtFileName = 'paxcounter_data_new.csv';// 
+$fp = fopen($txtFileName, 'wb');
+
+foreach ($filteredValues as $timeValuePair) {
+    // TODO shorten the timestamp to day and month
+    $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
+    $valuePairTimeStamp = $valuePairTime->getTimestamp();
+    $date = date('m-d', $valuePairTimeStamp);
+    $newCsvLine = [$date, $timeValuePair[$valueColumnName]];
+    fputcsv( $fp , $newCsvLine);
+}
+    fclose($fp);
 
