@@ -1,6 +1,8 @@
 <?php
 
 $maxChartItems = 400;
+$dayStartHour = 6;
+$dayEndHour = 23;
 
 $csvAddress = 'paxcounter_data.csv';
 $fp = fopen($csvAddress, 'r');
@@ -36,16 +38,17 @@ while ($row = fgetcsv($fp)) {
 // clean the data - throw away night times
 $dataArrayDayTimes = array();
 foreach ($dataArray as $timeValuePair) {
-    /** @var DateTime $time */
-    $time = new DateTime($timeValuePair[$timeColumnName]);
-    $unixTimeStamp = $time->getTimestamp();
+    /** @var DateTime $valuePairTimeInside */
+    $valuePairTimeInside = new DateTime($timeValuePair[$timeColumnName]);
+    $unixTimeStamp = $valuePairTimeInside->getTimestamp();
     $hour = date('H ', $unixTimeStamp);
 
-    if ($hour < 23 && $hour > 6) {
+    if ($hour < $dayEndHour && $hour >= $dayStartHour) {
         array_push($dataArrayDayTimes, $timeValuePair);
     }
 }
-// var_dump($dataArrayDayTimes); exit;
+var_dump(sizeof($dataArrayDayTimes), sizeof($dataArray));// exit;
+//var_dump($dataArrayDayTimes); exit;
 
 // get intervall length for timeframe and max chart items
 $earliest = new DateTime($dataArrayDayTimes[0][$timeColumnName]);
@@ -53,13 +56,59 @@ $latest = new DateTime($dataArrayDayTimes[sizeof($dataArrayDayTimes)][$timeColum
 $earliestTimeStamp = $earliest->getTimestamp();
 $latestTimeStamp = $latest->getTimestamp();
 // normal timestamp difference is in seconds
-$intervalTimeStamp = ($latestTimeStamp - $earliestTimeStamp);
-$intervalHours = $intervalTimeStamp / 60 / 60 / $maxChartItems;
+$intervalTimeStamp = ($latestTimeStamp - $earliestTimeStamp) / $maxChartItems;
+$intervalHours = $intervalTimeStamp / 60 / 60;
 
 //echo date('Y-m-d H:i:s', $earliestTimeStamp);
 //echo date('Y-m-d H:i:s', $latestTimeStamp);
 //var_dump($intervallHours);
 
 //  Summarize the data inside one intervall to mean values
+$startTimeStamp = $earliestTimeStamp;
+$endTimeStamp = $startTimeStamp + $intervalTimeStamp;
+$intervalValues = array();
+$filteredValues = array();
 
+foreach ($dataArrayDayTimes as $timeValuePair) {
+    /** @var DateTime $time */
+    $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
+    $valuePairTimeStamp = $valuePairTime->getTimestamp();
+
+    // getting only timeValuePairs from inside the interval
+    if ($valuePairTimeStamp >= $startTimeStamp && $valuePairTimeStamp < $endTimeStamp) {
+        array_push($intervalValues, intval($timeValuePair[$valueColumnName]));
+    }
+
+    // if we arrived at the end of the interval, compute average value
+    if ($valuePairTimeStamp >= $endTimeStamp) {
+        $averageValue = round(array_sum($intervalValues) / count($intervalValues));
+        // save the average value for interval start time in the usual format
+        $arrayFormat = array();
+        $arrayFormat[$timeColumnName] = date('Y-m-d H:i:s', $startTimeStamp);
+        $arrayFormat[$valueColumnName] = $averageValue;
+
+        // add summarized value to filtered values
+        array_push($filteredValues, $arrayFormat);
+
+        // reset for next loop and jump to next interval
+        $startTimeStamp = $endTimeStamp;
+        $proposedEndTimeStamp = $startTimeStamp + $intervalTimeStamp;
+
+        // jump to next day if the new interval end time would be after the $dayEndHour
+        if (!(date('H', $proposedEndTimeStamp) >= $dayEndHour)) {
+            $endTimeStamp = $proposedEndTimeStamp;
+        } else {
+            $newDay = clone $valuePairTime->add(date_interval_create_from_date_string('1 day'));
+            $newDay->setTime($dayStartHour,5);
+            $startTimeStamp = $newDay->getTimestamp();
+            $endTimeStamp = $startTimeStamp + $intervalTimeStamp;   
+            $nextDay = true;
+        }
+        $intervalValues = array();
+    }
+}
+
+var_dump("gefilterte Werte");   
+var_dump(count($filteredValues));
+var_dump($filteredValues);
 
