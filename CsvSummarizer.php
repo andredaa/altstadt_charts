@@ -14,18 +14,12 @@ $valueColumnName = $header[1];
 // get the rest of the rows
 $dataArray = array();
 while ($row = fgetcsv($fp)) {
-    //var_dump($row); //exit;
     $arr = array();
-    foreach ($header as $columnId => $columnName)
-        //  var_dump("rowNumber", $rowNumber, "value", $col);
-        //exit;
+    foreach ($header as $columnId => $columnName) {
         $arr[$columnName] = $row[$columnId];
+    }
     $dataArray[] = $arr;
-
-
 }
-
-//var_dump($dataArray);
 
 /**
  * How to clean the data?
@@ -37,8 +31,6 @@ while ($row = fgetcsv($fp)) {
  * Summarize the data inside one intervall to mean values
  *
  * build new array
- *
- *
  */
 
 // clean the data - throw away night times
@@ -55,19 +47,19 @@ foreach ($dataArray as $timeValuePair) {
 }
 // var_dump($dataArrayDayTimes); exit;
 
-// get intervall length for timeframe
+// get intervall length for timeframe and max chart items
 $earliest = new DateTime($dataArrayDayTimes[0][$timeColumnName]);
 $latest = new DateTime($dataArrayDayTimes[sizeof($dataArrayDayTimes)][$timeColumnName]);
 $earliestTimeStamp = $earliest->getTimestamp();
 $latestTimeStamp = $latest->getTimestamp();
 // normal timestamp difference is in seconds
-$intervallHours = (($latestTimeStamp - $earliestTimeStamp) / 60 /60) /$maxChartItems;
+$intervalTimeStamp = ($latestTimeStamp - $earliestTimeStamp);
+$intervalHours = $intervalTimeStamp / 60 / 60 / $maxChartItems;
 
 //echo date('Y-m-d H:i:s', $earliestTimeStamp);
 //echo date('Y-m-d H:i:s', $latestTimeStamp);
 //var_dump($intervallHours);
 
-
-
+//  Summarize the data inside one intervall to mean values
 
 
