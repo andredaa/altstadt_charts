@@ -56,16 +56,14 @@ $latest = new DateTime($dataArrayDayTimes[sizeof($dataArrayDayTimes)][$timeColum
 $earliestTimeStamp = $earliest->getTimestamp();
 $latestTimeStamp = $latest->getTimestamp();
 // normal timestamp difference is in seconds
-$intervalTimeStamp = ($latestTimeStamp - $earliestTimeStamp) / $maxChartItems;
-$intervalHours = $intervalTimeStamp / 60 / 60;
-
-//echo date('Y-m-d H:i:s', $earliestTimeStamp);
-//echo date('Y-m-d H:i:s', $latestTimeStamp);
-//var_dump($intervallHours);
-
+$nightTimeSeconds = ((24-$dayEndHour) + $dayStartHour) *60 *60;
+$recordingDays = floor(($latestTimeStamp - $earliestTimeStamp) / 60 / 60 / 24);
+// interval is the amount of time with daytime data divided by the maxChartItems
+$intervalDuration = (($latestTimeStamp - $earliestTimeStamp) - ($nightTimeSeconds * $recordingDays)) / $maxChartItems;
+//$intervalDuration = 1/$intervalDuration;
 //  Summarize the data inside one intervall to mean values
 $startTimeStamp = $earliestTimeStamp;
-$endTimeStamp = $startTimeStamp + $intervalTimeStamp;
+$endTimeStamp = $startTimeStamp + $intervalDuration;
 $intervalValues = array();
 $filteredValues = array();
 
@@ -73,10 +71,18 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
     /** @var DateTime $time */
     $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
     $valuePairTimeStamp = $valuePairTime->getTimestamp();
-
+    // TODO es fehlen teilweise werte in der original datei
     // getting only timeValuePairs from inside the interval
     if ($valuePairTimeStamp >= $startTimeStamp && $valuePairTimeStamp < $endTimeStamp) {
         array_push($intervalValues, intval($timeValuePair[$valueColumnName]));
+    }
+
+    // there are some "holes" in the data stream, fast forward to next available datapoint
+    if ($valuePairTimeStamp > $endTimeStamp && $intervalValues === []) {
+        var_dump("hole in the dataset at", $timeValuePair);
+        $startTimeStamp = $valuePairTimeStamp;
+        $endTimeStamp = $startTimeStamp + $intervalDuration;
+        continue;
     }
 
     // if we arrived at the end of the interval, compute average value
@@ -91,16 +97,18 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
         array_push($filteredValues, $arrayFormat);
 
         // reset for next loop and jump to next interval
-        $startTimeStamp = $endTimeStamp;
-        $proposedEndTimeStamp = $startTimeStamp + $intervalTimeStamp;
+        $proposedStartTimeStamp = $startTimeStamp + $intervalDuration;
         // jump to next day if the new interval end time would be after the $dayEndHour
-        if (!(date('H', $proposedEndTimeStamp) >= $dayEndHour)) {
-            $endTimeStamp = $proposedEndTimeStamp;
+        if (!(date('H', $proposedStartTimeStamp) >= $dayEndHour)) {
+            $startTimeStamp = $proposedStartTimeStamp;
+            $endTimeStamp = $proposedStartTimeStamp + $intervalDuration;
         } else {
-            $newDay = clone $valuePairTime->add(date_interval_create_from_date_string('1 day'));
-            $newDay->setTime($dayStartHour,5);
-            $startTimeStamp = $newDay->getTimestamp();
-            $endTimeStamp = $startTimeStamp + $intervalTimeStamp;   
+            /** @var DateTime $currentDay */
+            $currentDay = new DateTime(date('Y-m-d H:i:s', $startTimeStamp));
+            $newDay = $currentDay->add(date_interval_create_from_date_string('1 day'));
+            $newDay->setTime($dayStartHour, 0);
+            $startTimeStamp = $currentDay->getTimestamp();
+            $endTimeStamp = $startTimeStamp + $intervalDuration;
             $nextDay = true;
         }
         $intervalValues = array();
@@ -109,7 +117,8 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
 
 var_dump("gefilterte Werte");   
 var_dump(count($filteredValues));
-var_dump($filteredValues);
+var_dump($filteredValues[count($filteredValues)-1]);
+var_dump($dataArray[count($dataArray)-1]);
 
 // close source csv file
 fclose($fp);
@@ -120,6 +129,7 @@ $fp = fopen($txtFileName, 'wb');
 
 foreach ($filteredValues as $timeValuePair) {
     // TODO shorten the timestamp to day and month
+    var_dump($timeValuePair);
     $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
     $valuePairTimeStamp = $valuePairTime->getTimestamp();
     $date = date('m-d', $valuePairTimeStamp);
