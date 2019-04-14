@@ -1,7 +1,7 @@
 <?php
 
 $maxChartItems = 400;
-$dayStartHour = 6;
+$dayStartHour = 7;
 $dayEndHour = 23;
 
 $csvAddress = 'paxcounter_data.csv';
@@ -35,7 +35,7 @@ while ($row = fgetcsv($fp)) {
  * build new array
  */
 
-// clean the data - throw away night times
+// throw away night time data
 $dataArrayDayTimes = array();
 foreach ($dataArray as $timeValuePair) {
     /** @var DateTime $valuePairTimeInside */
