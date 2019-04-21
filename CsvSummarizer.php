@@ -38,9 +38,15 @@ while ($row = fgetcsv($fp)) {
  * build new array
  */
 
-// throw away night time data
+// throw away night time data and empty data
 $dataArrayDayTimes = array();
 foreach ($dataArray as $timeValuePair) {
+    // filter out logs without value
+    if ($timeValuePair[$valueColumnName] == '') {
+        //var_dump("was empty");
+        continue;
+    }
+
     /** @var DateTime $valuePairTimeInside */
     $valuePairTimeInside = new DateTime($timeValuePair[$timeColumnName]);
     $unixTimeStamp = $valuePairTimeInside->getTimestamp();
@@ -71,6 +77,7 @@ $filteredValues = array();
 $startTimeStamp = $earliestTimeStamp;
 $endTimeStamp = $startTimeStamp + $intervalDuration;
 $intervalValues = array();
+$isNewDay = true;
 foreach ($dataArrayDayTimes as $timeValuePair) {
     /** @var DateTime $time */
     $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
@@ -95,6 +102,12 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
         // save the average value for interval start time in the usual format
         $arrayFormat = array();
         $arrayFormat[$timeColumnName] = date('Y-m-d H:i:s', $startTimeStamp);
+        if ($isNewDay) {
+            $arrayFormat['isNewDay'] = true;
+            $isNewDay = false;
+        } else {
+            $arrayFormat['isNewDay'] = false;
+        }
         $arrayFormat[$valueColumnName] = $averageValue;
 
         // add summarized value to filtered values
@@ -113,7 +126,7 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
             $newDay->setTime($dayStartHour, 0);
             $startTimeStamp = $currentDay->getTimestamp();
             $endTimeStamp = $startTimeStamp + $intervalDuration;
-            $nextDay = true;
+            $isNewDay = true;
         }
         $intervalValues = array();
     }
@@ -122,12 +135,23 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
 // add latest 15 values as detailed values
 for ($i = (count($dataArrayDayTimes) - $detailedNewItemsCount); $i <= count($dataArrayDayTimes)-1; $i++) {
     $timeValuePair = $dataArrayDayTimes[$i];
+    unset($timeValuePair['isNewDay']);
     $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
     $valuePairTimeStamp = $valuePairTime->getTimestamp();
-    $valuePairTimeStamp = date('F-d H:i', $valuePairTimeStamp);
+    $valuePairTimeStamp = date('H:i', $valuePairTimeStamp);
 
     $arrayFormat = array();
-    $arrayFormat[$timeColumnName] = $valuePairTimeStamp . ' - ' . $timeValuePair[$valueColumnName] . ' Personen';
+    // add detailed time stamp to every only for every fourth value (for readability of labels)
+    if ($i % 5 === 0) {
+        if(intval($timeValuePair[$valueColumnName]) !== 1) {
+            // add "en" to "Person", if more than 1 person is present
+            $arrayFormat[$timeColumnName] = $valuePairTimeStamp . ' - ' . $timeValuePair[$valueColumnName] . ' Personen';
+        } else {
+            $arrayFormat[$timeColumnName] = $valuePairTimeStamp . ' - ' . $timeValuePair[$valueColumnName] . ' Person';
+        }
+    } else {
+        $arrayFormat[$timeColumnName] = ' ';
+    }
     $arrayFormat[$valueColumnName] = $timeValuePair[$valueColumnName];
 
     // add summarized value to filtered values
@@ -154,16 +178,19 @@ foreach ($filteredValues as $id => $timeValuePair) {
     // TODO shorten the timestamp to day and month
   //  var_dump($timeValuePair);
     // only for non detailed values
-    if ($id < (count($filteredValues) - $detailedNewItemsCount)) {
-        $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
-        $valuePairTimeStamp = $valuePairTime->getTimestamp();
-        $date = date('F-d', $valuePairTimeStamp);
-        $timeValuePair[$timeColumnName] = $date;
+    if ($id <= (count($filteredValues) - $detailedNewItemsCount)) {
+        if ($timeValuePair['isNewDay']) {
+            $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
+            $valuePairTimeStamp = $valuePairTime->getTimestamp();
+            $date = date('F-d', $valuePairTimeStamp);
+            $timeValuePair[$timeColumnName] = $date;
+        } else {
+            // set date label only for every new day
+            $timeValuePair[$timeColumnName] = ' ';
+        }
     }
-        var_dump($timeValuePair);
         $newCsvLine = [$timeValuePair[$timeColumnName], $timeValuePair[$valueColumnName]];
         fputcsv($fp, $newCsvLine);
 }
-
 fclose($fp);
 
