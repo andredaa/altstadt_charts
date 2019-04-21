@@ -1,6 +1,9 @@
 <?php
+// Set locale to German for names of months
+setlocale(LC_TIME, "de_DE");
 
 $maxChartItems = 400;
+$detailedNewItemsCount = 15;
 $dayStartHour = 7;
 $dayEndHour = 23;
 
@@ -48,11 +51,12 @@ foreach ($dataArray as $timeValuePair) {
     }
 }
 
-var_dump(sizeof($dataArrayDayTimes), sizeof($dataArray));// exit;
+//var_dump(sizeof($dataArrayDayTimes), sizeof($dataArray));// exit;
 
 // get intervall length for timeframe and max chart items
+// the fiveteen earliest values will be added as single vaues, without calculating averages
 $earliest = new DateTime($dataArrayDayTimes[0][$timeColumnName]);
-$latest = new DateTime($dataArrayDayTimes[sizeof($dataArrayDayTimes)][$timeColumnName]);
+$latest = new DateTime($dataArrayDayTimes[sizeof($dataArrayDayTimes)- $detailedNewItemsCount][$timeColumnName]);
 $earliestTimeStamp = $earliest->getTimestamp();
 $latestTimeStamp = $latest->getTimestamp();
 // normal timestamp difference is in seconds
@@ -61,12 +65,12 @@ $recordingDays = floor(($latestTimeStamp - $earliestTimeStamp) / 60 / 60 / 24);
 // interval is the amount of time with daytime data divided by the maxChartItems
 $intervalDuration = (($latestTimeStamp - $earliestTimeStamp) - ($nightTimeSeconds * $recordingDays)) / $maxChartItems;
 //$intervalDuration = 1/$intervalDuration;
-//  Summarize the data inside one intervall to mean values
+
+//  Summarize the data inside one interval to mean values and add them to filtered values
+$filteredValues = array();
 $startTimeStamp = $earliestTimeStamp;
 $endTimeStamp = $startTimeStamp + $intervalDuration;
 $intervalValues = array();
-$filteredValues = array();
-
 foreach ($dataArrayDayTimes as $timeValuePair) {
     /** @var DateTime $time */
     $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
@@ -79,7 +83,7 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
 
     // there are some "holes" in the data stream, fast forward to next available datapoint
     if ($valuePairTimeStamp > $endTimeStamp && $intervalValues === []) {
-        var_dump("hole in the dataset at", $timeValuePair);
+        //var_dump("hole in the dataset at", $timeValuePair);
         $startTimeStamp = $valuePairTimeStamp;
         $endTimeStamp = $startTimeStamp + $intervalDuration;
         continue;
@@ -115,26 +119,51 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
     }
 }
 
-var_dump("gefilterte Werte");   
+// add latest 15 values as detailed values
+for ($i = (count($dataArrayDayTimes) - $detailedNewItemsCount); $i <= count($dataArrayDayTimes)-1; $i++) {
+    $timeValuePair = $dataArrayDayTimes[$i];
+    $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
+    $valuePairTimeStamp = $valuePairTime->getTimestamp();
+    $valuePairTimeStamp = date('F-d H:i', $valuePairTimeStamp);
+
+    $arrayFormat = array();
+    $arrayFormat[$timeColumnName] = $valuePairTimeStamp . ' - ' . $timeValuePair[$valueColumnName] . ' Personen';
+    $arrayFormat[$valueColumnName] = $timeValuePair[$valueColumnName];
+
+    // add summarized value to filtered values
+    array_push($filteredValues, $arrayFormat);
+}
+
+
+/*
+var_dump("gefilterte Werte");
 var_dump(count($filteredValues));
 var_dump($filteredValues[count($filteredValues)-1]);
 var_dump($dataArray[count($dataArray)-1]);
-
+*/
 // close source csv file
 fclose($fp);
 
-// open new csv file
-$txtFileName = 'paxcounter_data_new.csv';// 
+// open new csv file for filtered values
+$txtFileName = 'paxcounter_data_filtered.csv';//
 $fp = fopen($txtFileName, 'wb');
+$newCsvLine = ['time', 'value'];
+fputcsv( $fp , $newCsvLine);
 
-foreach ($filteredValues as $timeValuePair) {
+foreach ($filteredValues as $id => $timeValuePair) {
     // TODO shorten the timestamp to day and month
-    var_dump($timeValuePair);
-    $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
-    $valuePairTimeStamp = $valuePairTime->getTimestamp();
-    $date = date('m-d', $valuePairTimeStamp);
-    $newCsvLine = [$date, $timeValuePair[$valueColumnName]];
-    fputcsv( $fp , $newCsvLine);
+  //  var_dump($timeValuePair);
+    // only for non detailed values
+    if ($id < (count($filteredValues) - $detailedNewItemsCount)) {
+        $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
+        $valuePairTimeStamp = $valuePairTime->getTimestamp();
+        $date = date('F-d', $valuePairTimeStamp);
+        $timeValuePair[$timeColumnName] = $date;
+    }
+        var_dump($timeValuePair);
+        $newCsvLine = [$timeValuePair[$timeColumnName], $timeValuePair[$valueColumnName]];
+        fputcsv($fp, $newCsvLine);
 }
-    fclose($fp);
+
+fclose($fp);
 
