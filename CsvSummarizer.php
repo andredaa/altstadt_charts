@@ -3,7 +3,7 @@
 setlocale(LC_TIME, "de_DE");
 
 $maxChartItems = 400;
-$detailedNewItemsCount = 15;
+$detailedNewItemsCount = 0;
 $dayStartHour = 7;
 $dayEndHour = 23;
 
@@ -50,21 +50,33 @@ foreach ($dataArray as $timeValuePair) {
     /** @var DateTime $valuePairTimeInside */
     $valuePairTimeInside = new DateTime($timeValuePair[$timeColumnName]);
     $unixTimeStamp = $valuePairTimeInside->getTimestamp();
+    $month = date('m ', $unixTimeStamp);
+    $day = date('d ', $unixTimeStamp);
+
+    // remove all data before the 6th of june
+    if ($month < 6 || ($month == 6 && $day < 6)) {
+        continue;
+    }
+
     $hour = date('H ', $unixTimeStamp);
 
     if ($hour < $dayEndHour && $hour >= $dayStartHour) {
         array_push($dataArrayDayTimes, $timeValuePair);
+       // var_dump($timeValuePair);
     }
 }
 
-//var_dump(sizeof($dataArrayDayTimes), sizeof($dataArray));// exit;
+//var_dump(sizeof($dataArrayDayTimes), sizeof($dataArray), $dataArrayDayTimes[sizeof($dataArrayDayTimes)-1]); exit;
 
 // get intervall length for timeframe and max chart items
 // the fiveteen earliest values will be added as single vaues, without calculating averages
 $earliest = new DateTime($dataArrayDayTimes[0][$timeColumnName]);
-$latest = new DateTime($dataArrayDayTimes[sizeof($dataArrayDayTimes)- $detailedNewItemsCount][$timeColumnName]);
+$latest = new DateTime($dataArrayDayTimes[sizeof($dataArrayDayTimes)- 1][$timeColumnName]);
 $earliestTimeStamp = $earliest->getTimestamp();
 $latestTimeStamp = $latest->getTimestamp();
+
+//var_dump($earliest, $latest);
+
 // normal timestamp difference is in seconds
 $nightTimeSeconds = ((24-$dayEndHour) + $dayStartHour) *60 *60;
 $recordingDays = floor(($latestTimeStamp - $earliestTimeStamp) / 60 / 60 / 24);
@@ -77,27 +89,15 @@ $filteredValues = array();
 $startTimeStamp = $earliestTimeStamp;
 $endTimeStamp = $startTimeStamp + $intervalDuration;
 $intervalValues = array();
+$currentDay = date('d', $startTimeStamp);
 $isNewDay = true;
-foreach ($dataArrayDayTimes as $timeValuePair) {
+foreach ($dataArrayDayTimes as $id => $timeValuePair) {
     /** @var DateTime $time */
     $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
     $valuePairTimeStamp = $valuePairTime->getTimestamp();
-    // TODO es fehlen teilweise werte in der original datei
-    // getting only timeValuePairs from inside the interval
-    if ($valuePairTimeStamp >= $startTimeStamp && $valuePairTimeStamp < $endTimeStamp) {
-        array_push($intervalValues, intval($timeValuePair[$valueColumnName]));
-    }
 
-    // there are some "holes" in the data stream, fast forward to next available datapoint
-    if ($valuePairTimeStamp > $endTimeStamp && $intervalValues === []) {
-        //var_dump("hole in the dataset at", $timeValuePair);
-        $startTimeStamp = $valuePairTimeStamp;
-        $endTimeStamp = $startTimeStamp + $intervalDuration;
-        continue;
-    }
-
-    // if we arrived at the end of the interval, compute average value
-    if ($valuePairTimeStamp >= $endTimeStamp) {
+    // compute average value of intervall, once first value is outside the interval or if we arrived at and of data
+    if ($valuePairTimeStamp >= $endTimeStamp || $id == sizeof($dataArrayDayTimes) -1) {
         $averageValue = round(array_sum($intervalValues) / count($intervalValues));
         // save the average value for interval start time in the usual format
         $arrayFormat = array();
@@ -120,19 +120,46 @@ foreach ($dataArrayDayTimes as $timeValuePair) {
             $startTimeStamp = $proposedStartTimeStamp;
             $endTimeStamp = $proposedStartTimeStamp + $intervalDuration;
         } else {
-            /** @var DateTime $currentDay */
-            $currentDay = new DateTime(date('Y-m-d H:i:s', $startTimeStamp));
-            $newDay = $currentDay->add(date_interval_create_from_date_string('1 day'));
+            /** @var DateTime $currentDateTime */
+            $currentDateTime = new DateTime(date('Y-m-d H:i:s', $startTimeStamp));
+            $newDay = $currentDateTime->add(date_interval_create_from_date_string('1 day'));
             $newDay->setTime($dayStartHour, 0);
-            $startTimeStamp = $currentDay->getTimestamp();
+            $startTimeStamp = $newDay->getTimestamp();
             $endTimeStamp = $startTimeStamp + $intervalDuration;
             $isNewDay = true;
         }
+
+        $isNewDay = false;
         $intervalValues = array();
     }
+
+    // date in data changed, reset interval times to new data
+    if (date('d', $valuePairTimeStamp) !== $currentDay) {
+        $currentDay = date('d', $valuePairTimeStamp);
+        $startTimeStamp = $valuePairTimeStamp;
+        $endTimeStamp = $startTimeStamp + $intervalDuration;
+        $isNewDay = true;
+    }
+
+    // TODO es fehlen teilweise werte in der original datei
+    // adding only timeValuePairs from inside the interval to inv
+    if ($valuePairTimeStamp >= $startTimeStamp && $valuePairTimeStamp < $endTimeStamp) {
+        array_push($intervalValues, intval($timeValuePair[$valueColumnName]));
+    }
+
+    // there are some "holes" in the data stream, fast forward to next available datapoint
+    if ($valuePairTimeStamp > $endTimeStamp && $intervalValues === []) {
+        //var_dump("hole in the dataset at", $timeValuePair);
+        $startTimeStamp = $valuePairTimeStamp;
+        $endTimeStamp = $startTimeStamp + $intervalDuration;
+        continue;
+    }
+
+
 }
 
-// add latest 15 values as detailed values
+
+/*// add latest 15 values as detailed values
 for ($i = (count($dataArrayDayTimes) - $detailedNewItemsCount); $i <= count($dataArrayDayTimes)-1; $i++) {
     $timeValuePair = $dataArrayDayTimes[$i];
     unset($timeValuePair['isNewDay']);
@@ -156,7 +183,7 @@ for ($i = (count($dataArrayDayTimes) - $detailedNewItemsCount); $i <= count($dat
 
     // add summarized value to filtered values
     array_push($filteredValues, $arrayFormat);
-}
+}*/
 
 
 /*
@@ -175,22 +202,17 @@ $newCsvLine = ['time', 'value'];
 fputcsv( $fp , $newCsvLine);
 
 foreach ($filteredValues as $id => $timeValuePair) {
-    // TODO shorten the timestamp to day and month
-  //  var_dump($timeValuePair);
-    // only for non detailed values
-    if ($id <= (count($filteredValues) - $detailedNewItemsCount)) {
-        if ($timeValuePair['isNewDay']) {
-            $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
-            $valuePairTimeStamp = $valuePairTime->getTimestamp();
-            $date = date('F-d', $valuePairTimeStamp);
-            $timeValuePair[$timeColumnName] = $date;
-        } else {
-            // set date label only for every new day
-            $timeValuePair[$timeColumnName] = ' ';
-        }
+    if ($timeValuePair['isNewDay']) {
+        $valuePairTime = new DateTime($timeValuePair[$timeColumnName]);
+        $valuePairTimeStamp = $valuePairTime->getTimestamp();
+        $date = date('F-d', $valuePairTimeStamp);
+        $timeValuePair[$timeColumnName] = $date;
+    } else {
+        // set date label only for every new day
+        $timeValuePair[$timeColumnName] = ' ';
     }
-        $newCsvLine = [$timeValuePair[$timeColumnName], $timeValuePair[$valueColumnName]];
-        fputcsv($fp, $newCsvLine);
+    $newCsvLine = [$timeValuePair[$timeColumnName], $timeValuePair[$valueColumnName]];
+    fputcsv($fp, $newCsvLine);
 }
 fclose($fp);
 
